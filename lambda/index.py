@@ -16,7 +16,7 @@ def lambda_handler(event, context):
     source_bucket = event['Records'][0]['s3']['bucket']['name']
     object_key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'])
     target_bucket = 'metricsdev-dst-bucket'
-    file_path = 'data/'
+    file_path = 'tbff20001_metrica/'
     copy_source = {'Bucket': source_bucket, 'Key': object_key}
     print ("Source bucket : ", source_bucket)
     print ("Target bucket : ", target_bucket)
