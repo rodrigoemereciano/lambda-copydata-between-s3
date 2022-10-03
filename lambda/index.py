@@ -2,12 +2,13 @@ from __future__ import print_function
 from cmath import e
 from urllib import response
 import boto3
-import time, urllib
-import json
+import urllib
 
 print ("*"*80)
 print ("Initializing..")
 print ("*"*80)
+
+prefix_source = 'topics/observability-metrica-capturada/'
 
 s3 = boto3.client('s3')
 
@@ -17,6 +18,7 @@ def lambda_handler(event, context):
     object_key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'])
     target_bucket = 'metricsdev-dst-bucket'
     file_path = 'tbff20001_metrica/'
+    #source_path = 'observability-metrica-capturada/'
     copy_source = {'Bucket': source_bucket, 'Key': object_key}
     print ("Source bucket : ", source_bucket)
     print ("Target bucket : ", target_bucket)
@@ -28,7 +30,7 @@ def lambda_handler(event, context):
         print ("Using waiter to waiting for object to persist through s3 service")
         waiter = s3.get_waiter('object_exists')
         waiter.wait(Bucket=source_bucket, Key=object_key)
-        s3.copy_object(Bucket=target_bucket, Key=file_path+object_key, CopySource=copy_source)
+        s3.copy_object(Bucket=target_bucket, Key=file_path+object_key.removeprefix(prefix_source), CopySource=copy_source)
         return response['ContentType']
     except Exception as err:
         print ("Error -"+str(err))
