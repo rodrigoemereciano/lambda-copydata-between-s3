@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Stack lambda copy objects
+
+Parameters:
+  SrcBucketName:
+    Type: String
+    Default: metricsdev-src-bucket
+  DstBucketName:
+    Type: String
+    Default: metricsdev-dst-bucket
+  LambdaFunctionName:
+    Type: String
+    Default: LambdaFunctionCF
+
+# criando s3 notification
+Resources:
+  LambdaRoleNew:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "LambdaRoleNew"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: '/'
+      Policies:
+      - PolicyName: s3-src
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              - s3:*
+            Resource:
+              - !Sub arn:aws:s3:::${SrcBucketName}
+              - !Sub arn:aws:s3:::${SrcBucketName}/*
+      - PolicyName: s3-dst
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              - s3:*
+            Resource:
+              - !Sub arn:aws:s3:::${DstBucketName}
+              - !Sub arn:aws:s3:::${DstBucketName}/*
+
+  Lambda:
+    Type: AWS::Lambda::Function
+    Properties: 
+      Code: 
+        ZipFile: | 
+          from __future__ import print_function
+          from cmath import e
+          from urllib import response
+          import boto3
+          import urllib
+
+          print ("*"*80)
+          print ("Initializing..")
+          print ("*"*80)
+
+          prefix_source = 'topics/metrica-capturada/'
+
+          s3 = boto3.client('s3')
+
+          def lambda_handler(event, context):
+              # TODO implement
+              source_bucket = event['Records'][0]['s3']['bucket']['name']
+              object_key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'])
+              target_bucket = 'metricsdev-dst-bucket'
+              file_path = 'tbff20001_metrica/'
+              #source_path = 'observability-metrica-capturada/'
+              copy_source = {'Bucket': source_bucket, 'Key': object_key}
+              print ("Source bucket : ", source_bucket)
+              print ("Target bucket : ", target_bucket)
+              print ("Log Stream name: ", context.log_stream_name)
+              print ("Log Group name: ", context.log_group_name)
+              print ("Request ID: ", context.aws_request_id)
+              print ("Mem. limits(MB): ", context.memory_limit_in_mb)
+              try:
+                  print ("Using waiter to waiting for object to persist through s3 service")
+                  waiter = s3.get_waiter('object_exists')
+                  waiter.wait(Bucket=source_bucket, Key=object_key)
+                  s3.copy_object(Bucket=target_bucket, Key=file_path+object_key.removeprefix(prefix_source), CopySource=copy_source)
+                  return response['ContentType']
+              except Exception as err:
+                  print ("Error -"+str(err))
+                  return 'erro'
+      Description: "Lambda para copia de arquivos"
+      FunctionName: !Ref LambdaFunctionName
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaRoleNew.Arn
+      Runtime: "python3.9"
+      Timeout: 10
+
+  Bucket:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      BucketName: !Ref SrcBucketName
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: topics/metrica-capturada/
+                  - Name: suffix
+                    Value: .json
+            Function: !GetAtt Lambda.Arn
+    DependsOn: Lambda
+
+  S3InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LambdaFunctionName
+      Principal: s3.amazonaws.com
+      SourceArn: !Sub arn:aws:s3:::${SrcBucketName}
+    DependsOn: Lambda
