@@ -27,6 +27,8 @@ def lambda_handler(event, context):
         waiter = s3.get_waiter('object_exists')
         waiter.wait(Bucket=source_bucket, Key=object_key)
         s3.copy_object(Bucket=target_bucket, Key=file_path+object_key.removeprefix(prefix_source), CopySource=copy_source)
+        #delete objects copied
+        s3.delete_object(Bucket=source_bucket, Key=object_key)
         return response['ContentType']
     except Exception as err:
         print ("Error -"+str(err))
